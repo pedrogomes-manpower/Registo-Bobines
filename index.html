@@ -1,19 +1,18 @@
 <!doctype html>
-<html lang="pt-PT">
-<head>
-<meta charset="utf-8">
+<html lang="pt-PT"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Registo de Trabalho</title>
+<title>Registo de trabalho</title>
 
-<!-- Configuração de Ícones para Smartphone / Desktop (PWA) -->
+<!-- Ícones PWA / Ecrã Principal do Smartphone -->
 <link rel="icon" type="image/png" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#ffffff">
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
 
 <style>
 :root {
@@ -26,21 +25,19 @@
   --ac-hover: #0369a1;
   --ok: #16a34a;
   --er: #dc2626;
-  color-scheme: light;
+  color-scheme: light light dark;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root {
     --bg: #0f172a;
     --card: #1e293b;
     --tx: #f8fafc;
     --mut: #94a3b8;
     --bd: #334155;
     --ac: #38bdf8;
-    --ac-hover: #0284c7;
     --ok: #4ade80;
     --er: #f87171;
-    color-scheme: dark;
   }
 }
 
@@ -51,16 +48,18 @@ body {
   background: var(--bg);
   color: var(--tx);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
+  line-height: 1.45;
 }
 
 main {
   max-width: 480px;
   margin: 0 auto;
   padding: 20px 16px;
+  padding-top: max(20px, env(safe-area-inset-top));
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
 }
 
+/* Cabeçalho Minimalista com Logótipo */
 .header {
   display: flex;
   flex-direction: column;
@@ -119,7 +118,7 @@ select, input[type=text] {
   background: var(--bg);
   color: var(--tx);
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: border-color .15s ease;
 }
 
 select:focus, input[type=text]:focus {
@@ -139,10 +138,10 @@ button, .btn {
   border: 0;
   border-radius: 10px;
   background: var(--ac);
-  color: #ffffff;
+  color: #fff;
   text-align: center;
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color .15s ease;
 }
 
 button:hover, .btn:hover {
@@ -169,6 +168,8 @@ button.x {
   border: 1px solid var(--bd);
   border-radius: 6px;
 }
+
+button:disabled { opacity: .6; }
 
 #msg {
   min-height: 20px;
@@ -209,12 +210,13 @@ details summary {
 <body>
 
 <main>
+  <!-- Topo com Logótipo e Título -->
   <header class="header">
     <img src="logo.png" alt="Manpower TBO" onerror="this.style.display='none'">
     <h1>Registo de trabalho</h1>
   </header>
 
-  <div id="off" class="card er" hidden>Erro ao ligar ao Supabase.</div>
+  <div id="off" class="card er" hidden>Configuração em falta: preencha o ficheiro config.js com os dados do Supabase.</div>
 
   <div class="card">
     <label for="user">Utilizador</label>
@@ -225,7 +227,7 @@ details summary {
         <input type="text" id="newu" placeholder="Nome do utilizador">
         <button id="addu">Adicionar</button>
       </div>
-      <ul id="ulist" style="margin-top: 10px;"></ul>
+      <ul id="ulist" style="margin-top:10px"></ul>
     </details>
   </div>
 
@@ -243,22 +245,22 @@ details summary {
 
   <div class="card">
     <h2>Últimos registos</h2>
-    <ul id="rec"><li><small>A carregar registos...</small></li></ul>
+    <ul id="rec"><li><small>Sem registos.</small></li></ul>
     <button class="sec" id="exp">Exportar tudo em CSV</button>
   </div>
 </main>
 
 <script>
-// ==========================================================
-// CONFIGURAÇÃO DO SUPABASE
-// ==========================================================
-const SUPABASE_URL = 'https://trhddrfwojfrmfksbnpo.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRyaGRkcmZ3b2pmcm1ma3NibnBvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3NTg0ODgsImV4cCI6MjEwODMzNDQ4OH0.IugDijvuTQySsbjvouqqflOUZ02_ms-HbSpJm4W3U6c';
-// ==========================================================
-
 const $=i=>document.getElementById(i);
-let sb=null;
-const pad=n=>String(n).padStart(2,'0');
+const cfg=window.APP_CONFIG||{};
+const ok=cfg.SUPABASE_URL&&cfg.SUPABASE_ANON_KEY&&!cfg.SUPABASE_URL.includes('SEU-PROJETO');
+const db=ok?supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY):null;
+if(!db)$('off').hidden=false;
+
+const TZ='Europe/Lisbon';
+const fData=new Intl.DateTimeFormat('sv-SE',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'});
+const fHora=new Intl.DateTimeFormat('sv-SE',{timeZone:TZ,hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false});
+const dh=iso=>{const d=new Date(iso);return{data:fData.format(d),hora:fHora.format(d)}};
 function msg(t,bad){const m=$('msg');m.textContent=t;m.className=bad?'er':'ok'}
 function store(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
 
@@ -274,87 +276,68 @@ async function scan(file){
 $('photo').addEventListener('change',e=>{const f=e.target.files[0];if(f)scan(f);e.target.value=''});
 $('user').addEventListener('change',()=>store('u',$('user').value));
 
-async function carregarUtilizadores(){
-  const {data, error}=await sb.from('utilizadores').select('*').order('nome',{ascending:true});
-  if(error)return;
+async function loadUsers(){
+  const {data,error}=await db.from('utilizadores').select('id,nome').order('nome');
+  if(error)return msg('Erro ao carregar utilizadores: '+error.message,1);
   const sel=$('user'),cur=sel.value||store('u')||'',ul=$('ulist');
   sel.replaceChildren(new Option('— selecione —',''));ul.replaceChildren();
-  data.forEach(u=>{
-    sel.add(new Option(u.nome,u.nome));
+  data.forEach(u=>{sel.add(new Option(u.nome,u.nome));
     const li=document.createElement('li'),sp=document.createElement('span'),b=document.createElement('button');
     sp.textContent=u.nome;b.textContent='Remover';b.className='x';
-    b.onclick=async()=>{if(confirm('Remover “'+u.nome+'”?')){await sb.from('utilizadores').delete().eq('id',u.id);carregarUtilizadores()}};
-    li.append(sp,b);ul.append(li);
-  });
+    b.onclick=async()=>{if(!confirm('Remover “'+u.nome+'”? Os registos existentes mantêm-se.'))return;
+      const {error}=await db.from('utilizadores').delete().eq('id',u.id);
+      error?msg('Erro ao remover: '+error.message,1):loadUsers()};
+    li.append(sp,b);ul.append(li)});
   sel.value=cur;if(sel.value!==cur)sel.value='';
 }
 
-async function carregarRegistos(){
-  const {data, error}=await sb.from('registos').select('*').order('ts',{ascending:false}).limit(30);
+async function loadRecords(){
+  const {data,error}=await db.from('registos').select('codigo,utilizador,criado_em').order('criado_em',{ascending:false}).limit(30);
   const ul=$('rec');ul.replaceChildren();
-  if(error||!data.length){ul.innerHTML='<li><small>Sem registos.</small></li>';return}
-  data.forEach(r=>{
-    const li=document.createElement('li'),a=document.createElement('code'),b=document.createElement('small');
-    a.textContent=r.codigo;b.textContent=r.utilizador+' · '+r.data+' '+r.hora;li.append(a,b);ul.append(li);
-  });
+  if(error)return msg('Erro ao carregar registos: '+error.message,1);
+  if(!data.length){ul.innerHTML='<li><small>Sem registos.</small></li>';return}
+  data.forEach(r=>{const {data:d,hora}=dh(r.criado_em),li=document.createElement('li'),a=document.createElement('code'),b=document.createElement('small');
+    a.textContent=r.codigo;b.textContent=r.utilizador+' · '+d+' '+hora;li.append(a,b);ul.append(li)});
 }
+
+$('addu').addEventListener('click',async()=>{
+  const n=$('newu').value.trim();if(!n||!db)return;
+  const {error}=await db.from('utilizadores').insert({nome:n});
+  if(error)return msg(error.code==='23505'?'Esse utilizador já existe.':'Erro ao adicionar: '+error.message,1);
+  $('newu').value='';loadUsers();
+});
 
 $('save').addEventListener('click',async()=>{
   const u=$('user').value,c=$('code').value.trim();
-  if(!sb)return msg('Base de dados indisponível.',1);
+  if(!db)return msg('Configuração em falta.',1);
   if(!u)return msg('Selecione o utilizador.',1);
   if(!c)return msg('Leia ou escreva um código de barras.',1);
-  const d=new Date();
-  const {error}=await sb.from('registos').insert([{
-    codigo:c,utilizador:u,
-    data:d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()),
-    hora:pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds()),
-    ts:d.toISOString()
-  }]);
-  if(error)msg('Erro ao guardar: '+error.message,1);
-  else{$('code').value='';msg('Registo guardado.');carregarRegistos()}
-});
-
-$('addu').addEventListener('click',async()=>{
-  const n=$('newu').value.trim();if(!n||!sb)return;
-  const {error}=await sb.from('utilizadores').insert([{nome:n}]);
-  if(error)msg('Erro ao adicionar utilizador.',1);
-  else{$('newu').value='';carregarUtilizadores()}
+  $('save').disabled=true;
+  const {error}=await db.from('registos').insert({codigo:c,utilizador:u});
+  $('save').disabled=false;
+  if(error)return msg('Erro ao guardar: '+error.message,1);
+  $('code').value='';msg('Registo guardado.');loadRecords();
 });
 
 function q(s){s=String(s);return /[;"\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
 $('exp').addEventListener('click',async()=>{
-  if(!sb)return msg('Base de dados indisponível.',1);
-  const {data,error}=await sb.from('registos').select('*').order('ts',{ascending:true});
-  if(error)return msg('Erro na exportação.',1);
+  if(!db)return msg('Configuração em falta.',1);
+  msg('A preparar exportação…');
+  let rows=[],from=0;const step=1000;
+  for(;;){
+    const {data,error}=await db.from('registos').select('codigo,utilizador,criado_em').order('criado_em').order('id').range(from,from+step-1);
+    if(error)return msg('Erro na exportação: '+error.message,1);
+    rows=rows.concat(data);if(data.length<step)break;from+=step;
+  }
   let csv='\ufeffcodigo_barras;data;hora;utilizador\r\n';
-  data.forEach(r=>{csv+=[r.codigo,r.data,r.hora,r.utilizador].map(q).join(';')+'\r\n'});
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  const d=new Date();
-  a.href=url;a.download='registos_'+d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'.csv';
-  document.body.appendChild(a);a.click();document.body.removeChild(a);
-  msg(data.length+' registos exportados.');
+  rows.forEach(r=>{const {data:d,hora}=dh(r.criado_em);csv+=[r.codigo,d,hora,r.utilizador].map(q).join(';')+'\r\n'});
+  const t=fData.format(new Date()).replaceAll('-','');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download='registos_'+t+'.csv';document.body.append(a);a.click();a.remove();
+  msg(rows.length+' registos exportados.');
 });
 
-window.addEventListener('DOMContentLoaded', async () => {
-  if (typeof window.supabase === 'undefined' || !SUPABASE_URL || SUPABASE_ANON_KEY.includes('A_SUA_CHAVE')) {
-    $('off').textContent = 'Erro: Biblioteca do Supabase não carregada ou chave por preencher.';
-    $('off').hidden = false;
-    return;
-  }
-  try {
-    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    await carregarUtilizadores();
-    await carregarRegistos();
-    sb.channel('public:utilizadores').on('postgres_changes', {event: '*', schema: 'public', table: 'utilizadores'}, () => carregarUtilizadores()).subscribe();
-    sb.channel('public:registos').on('postgres_changes', {event: '*', schema: 'public', table: 'registos'}, () => carregarRegistos()).subscribe();
-  } catch (e) {
-    $('off').textContent = 'Erro detalhado: ' + (e.message || e);
-    $('off').hidden = false;
-  }
-});
+if(db){loadUsers();loadRecords()}
 </script>
 </body>
 </html>
