@@ -335,17 +335,23 @@ $('exp').addEventListener('click',async()=>{
   msg(data.length+' registos exportados.');
 });
 
-window.addEventListener('DOMContentLoaded',async()=>{
-  if(typeof window.supabase==='undefined'||!window.SUPABASE_URL||window.SUPABASE_URL.includes('SUA_URL')){
-    $('off').hidden=false;return;
+window.addEventListener('DOMContentLoaded', async () => {
+  if (typeof window.supabase === 'undefined' || !window.SUPABASE_URL || window.SUPABASE_URL.includes('SUA_URL')) {
+    $('off').textContent = 'Erro: Biblioteca do Supabase não carregada ou URL em falta.';
+    $('off').hidden = false;
+    return;
   }
-  try{
-    sb=window.supabase.createClient(window.SUPABASE_URL,window.SUPABASE_ANON_KEY);
+  try {
+    sb = window.supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON_KEY);
     await carregarUtilizadores();
     await carregarRegistos();
-    sb.channel('public:utilizadores').on('postgres_changes',{event:'*',schema:'public',table:'utilizadores'},()=>carregarUtilizadores()).subscribe();
-    sb.channel('public:registos').on('postgres_changes',{event:'*',schema:'public',table:'registos'},()=>carregarRegistos()).subscribe();
-  }catch(e){$('off').hidden=false}
+    sb.channel('public:utilizadores').on('postgres_changes', {event: '*', schema: 'public', table: 'utilizadores'}, () => carregarUtilizadores()).subscribe();
+    sb.channel('public:registos').on('postgres_changes', {event: '*', schema: 'public', table: 'registos'}, () => carregarRegistos()).subscribe();
+  } catch (e) {
+    // Mostra o erro técnico exato no ecrã
+    $('off').textContent = 'Erro detalhado: ' + (e.message || e);
+    $('off').hidden = false;
+  }
 });
 </script>
 </body>
