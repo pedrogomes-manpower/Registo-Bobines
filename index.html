@@ -285,87 +285,17 @@ $('adminDetails').addEventListener('click', (e) => {
   }
 });
 
-async function scan(file) {
-  msg('A ler o código…');
-  let code = null;
-
-  try {
-    // 1. Carregar o ficheiro para um elemento Image usando FileReader (compatível com 100% dos telemóveis)
-    const dataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-    const img = await new Promise((resolve, reject) => {
-      const image = new Image();
-      image.onload = () => resolve(image);
-      image.onerror = reject;
-      image.src = dataUrl;
-    });
-
-    // 2. Redimensionar a imagem se for demasiado grande (protege a memória do iPhone e Android)
-    let targetImg = img;
-    const MAX_DIM = 1200;
-    if (img.width > MAX_DIM || img.height > MAX_DIM) {
-      const canvas = document.createElement('canvas');
-      let w = img.width, h = img.height;
-      if (w > h) {
-        h = Math.round((h * MAX_DIM) / w);
-        w = MAX_DIM;
-      } else {
-        w = Math.round((w * MAX_DIM) / h);
-        h = MAX_DIM;
-      }
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-      
-      targetImg = await new Promise((resolve) => {
-        const resizedImg = new Image();
-        resizedImg.onload = () => resolve(resizedImg);
-        resizedImg.src = canvas.toDataURL('image/jpeg', 0.85);
-      });
-    }
-
-    // 3. Tentar leitura nativa (BarcodeDetector) se suportado pelo navegador
-    try {
-      if ('BarcodeDetector' in window) {
-        const detector = new BarcodeDetector();
-        const r = await detector.detect(targetImg);
-        if (r && r.length > 0 && r[0].rawValue) {
-          code = r[0].rawValue;
-        }
-      }
-    } catch (e) {}
-
-    // 4. Se falhar, recorrer à biblioteca ZXing de forma segura
-    if (!code && window.ZXing) {
-      const reader = new ZXing.BrowserMultiFormatReader();
-      try {
-        const result = await reader.decodeFromImageElement(targetImg);
-        if (result) code = result.getText();
-      } catch (e) {
-        try {
-          const result = await reader.decodeFromImageUrl(targetImg.src);
-          if (result) code = result.getText();
-        } catch (err) {}
-      }
-    }
-
-    if (code) {
-      $('code').value = code;
-      msg('Código lido. Confirme e guarde.');
-    } else {
-      msg('Não foi possível ler. Tente tirar a foto mais de perto e com boa luz, ou escreva o código.', 1);
-    }
-
-  } catch (e) {
-    msg('Erro ao processar a imagem.', 1);
-  }
+async function scan(file){
+  msg('A ler o código…');let code=null;
+  try{if('BarcodeDetector' in window){const r=await new BarcodeDetector().detect(await createImageBitmap(file));if(r[0])code=r[0].rawValue}}catch(e){}
+  if(!code&&window.ZXing){const url=URL.createObjectURL(file);
+    try{code=(await new ZXing.BrowserMultiFormatReader().decodeFromImageUrl(url)).getText()}catch(e){}
+    URL.revokeObjectURL(url)}
+  if(code){$('code').value=code;msg('Código lido. Confirme e guarde.')}
+  else msg('Não foi possível ler. Tente outra foto, mais perto e com boa luz, ou escreva o código.',1);
 }
+$('photo').addEventListener('change',e=>{const f=e.target.files[0];if(f)scan(f);e.target.value=''});
+$('user').addEventListener('change',()=>store('u',$('user').value));
 
 async function loadUsers(){
   const {data,error}=await db.from('utilizadores').select('id,nome').order('nome');
