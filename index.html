@@ -59,7 +59,6 @@ main {
   padding-bottom: max(20px, env(safe-area-inset-bottom));
 }
 
-/* Cabeçalho Minimalista com Logótipo */
 .header {
   display: flex;
   flex-direction: column;
@@ -210,7 +209,6 @@ details summary {
 <body>
 
 <main>
-  <!-- Topo com Logótipo e Título -->
   <header class="header">
     <img src="logo.png" alt="Manpower TBO" onerror="this.style.display='none'">
     <h1>Registo de trabalho</h1>
@@ -221,7 +219,9 @@ details summary {
   <div class="card">
     <label for="user">Utilizador</label>
     <select id="user"><option value="">— selecione —</option></select>
-    <details>
+    
+    <!-- Secção de gestão protegida por PIN -->
+    <details id="adminDetails">
       <summary>Gerir utilizadores</summary>
       <div class="row" style="margin-top:10px">
         <input type="text" id="newu" placeholder="Nome do utilizador">
@@ -251,6 +251,12 @@ details summary {
 </main>
 
 <script>
+// ==========================================
+// PIN DE ADMINISTRAÇÃO (Pode alterar aqui)
+// ==========================================
+const ADMIN_PIN = '1234';
+// ==========================================
+
 const $=i=>document.getElementById(i);
 const cfg=window.APP_CONFIG||{};
 const ok=cfg.SUPABASE_URL&&cfg.SUPABASE_ANON_KEY&&!cfg.SUPABASE_URL.includes('SEU-PROJETO');
@@ -263,6 +269,21 @@ const fHora=new Intl.DateTimeFormat('sv-SE',{timeZone:TZ,hour:'2-digit',minute:'
 const dh=iso=>{const d=new Date(iso);return{data:fData.format(d),hora:fHora.format(d)}};
 function msg(t,bad){const m=$('msg');m.textContent=t;m.className=bad?'er':'ok'}
 function store(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
+
+// Proteção da secção de gestão de utilizadores com PIN
+$('adminDetails').addEventListener('click', (e) => {
+  const details = $('adminDetails');
+  // Se estiver fechado, vai abrir -> pedimos o PIN
+  if (!details.open) {
+    e.preventDefault(); // Impede a abertura imediata
+    const pin = prompt('Introduza o PIN de administração para gerir utilizadores:');
+    if (pin === ADMIN_PIN) {
+      details.open = true; // Abre se o PIN estiver correto
+    } else if (pin !== null) {
+      alert('PIN incorreto.');
+    }
+  }
+});
 
 async function scan(file){
   msg('A ler o código…');let code=null;
@@ -311,7 +332,7 @@ $('save').addEventListener('click',async()=>{
   const u=$('user').value,c=$('code').value.trim();
   if(!db)return msg('Configuração em falta.',1);
   if(!u)return msg('Selecione o utilizador.',1);
-  if(!c)return msg('Leia ou escreva um código de barras.',1);
+  if(!c)return mag?msg('Leia ou escreva um código de barras.',1):msg('Leia ou escreva um código de barras.',1);
   $('save').disabled=true;
   const {error}=await db.from('registos').insert({codigo:c,utilizador:u});
   $('save').disabled=false;
