@@ -285,17 +285,58 @@ $('adminDetails').addEventListener('click', (e) => {
   }
 });
 
-async function scan(file){
-  msg('A ler o código…');let code=null;
-  try{if('BarcodeDetector' in window){const r=await new BarcodeDetector().detect(await createImageBitmap(file));if(r[0])code=r[0].rawValue}}catch(e){}
-  if(!code&&window.ZXing){const url=URL.createObjectURL(file);
-    try{code=(await new ZXing.BrowserMultiFormatReader().decodeFromImageUrl(url)).getText()}catch(e){}
-    URL.revokeObjectURL(url)}
-  if(code){$('code').value=code;msg('Código lido. Confirme e guarde.')}
-  else msg('Não foi possível ler. Tente outra foto, mais perto e com boa luz, ou escreva o código.',1);
+async function scan(file) {
+  msg('A ler o código…');
+  
+  try {
+    // Redimensionar imagem para evitar falhas de memória no iPhone/Safari
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    const MAX_WIDTH = 1000;
+    let width = bitmap.width;
+    let height = bitmap.height;
+    
+    if (width > MAX_WIDTH) {
+      height = Math.round((height * MAX_WIDTH) / width);
+      width = MAX_WIDTH;
+    }
+    
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    
+    canvas.toBlob(async (blob) => {
+      let code = null;
+      const resizedFile = new File([blob], file.name, { type: 'image/jpeg' });
+      
+      try {
+        if ('BarcodeDetector' in window) {
+          const r = await new BarcodeDetector().detect(await createImageBitmap(resizedFile));
+          if (r[0]) code = r[0].rawValue;
+        }
+      } catch (e) {}
+
+      if (!code && window.ZXing) {
+        const url = URL.createObjectURL(resizedFile);
+        try {
+          code = (await new ZXing.BrowserMultiFormatReader().decodeFromImageUrl(url)).getText();
+        } catch (e) {}
+        URL.revokeObjectURL(url);
+      }
+
+      if (code) {
+        $('code').value = code;
+        msg('Código lido. Confirme e guarde.');
+      } else {
+        msg('Não foi possível ler. Tente tirar a foto mais de perto e com boa luz.', 1);
+      }
+    }, 'image/jpeg', 0.85);
+
+  } catch (e) {
+    msg('Erro ao processar a imagem no iPhone.', 1);
+  }
 }
-$('photo').addEventListener('change',e=>{const f=e.target.files[0];if(f)scan(f);e.target.value=''});
-$('user').addEventListener('change',()=>store('u',$('user').value));
 
 async function loadUsers(){
   const {data,error}=await db.from('utilizadores').select('id,nome').order('nome');
