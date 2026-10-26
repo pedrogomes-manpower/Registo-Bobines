@@ -313,7 +313,7 @@ async function loadUsers(){
 }
 
 async function loadRecords(){
-  const {data,error}=await db.from('registos').select('codigo,utilizador,criado_em').order('criado_em',{ascending:false}).limit(30);
+  const {data,error}=await db.from('registos').select('codigo,utilizador,criado_em').order('criado_em',{ascending:false}).limit(5);
   const ul=$('rec');ul.replaceChildren();
   if(error)return msg('Erro ao carregar registos: '+error.message,1);
   if(!data.length){ul.innerHTML='<li><small>Sem registos.</small></li>';return}
