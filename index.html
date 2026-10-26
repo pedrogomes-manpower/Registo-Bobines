@@ -227,7 +227,6 @@ details summary {
     <label for="user">Utilizador</label>
     <select id="user"><option value="">— selecione —</option></select>
     
-    <!-- Secção de gestão protegida por PIN -->
     <details id="adminDetails">
       <summary>Gerir utilizadores</summary>
       <div class="row" style="margin-top:10px">
@@ -240,7 +239,6 @@ details summary {
 
   <div class="card">
     <h2>Código de barras</h2>
-    <!-- Ambos os botões usam agora a classe .btn para terem exatamente o mesmo design -->
     <button id="live">║▌║ Ler com a câmara</button>
     <label class="btn" for="photo">📷 Tirar foto ao código</label>
     <input type="file" id="photo" accept="image/*" capture="environment" hidden>
@@ -286,7 +284,6 @@ const dh=iso=>{const d=new Date(iso);return{data:fData.format(d),hora:fHora.form
 function msg(t,bad){const m=$('msg');m.textContent=t;m.className=bad?'er':'ok'}
 function store(k,v){try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}}
 
-// Proteção da secção de gestão de utilizadores com PIN
 $('adminDetails').addEventListener('click', (e) => {
   const details = $('adminDetails');
   if (!details.open) {
@@ -300,7 +297,6 @@ $('adminDetails').addEventListener('click', (e) => {
   }
 });
 
-// ---- Descodificação (funciona em Android e iPhone) ----
 const FMT=['EAN_13','EAN_8','UPC_A','UPC_E','CODE_128','CODE_39','CODE_93','ITF','QR_CODE','DATA_MATRIX'];
 let HINTS=null,nat=null;
 function hints(){
@@ -336,7 +332,6 @@ async function scan(file){
   else msg('Não foi possível ler. Tente outra foto, mais perto e com boa luz, ou escreva o código.',1);
 }
 
-// ---- Leitura em direto com a câmara ----
 let stream=null,scanning=false;
 async function startLive(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return msg('Este browser não abre a câmara aqui. Use “Tirar foto ao código”.',1);
@@ -389,13 +384,29 @@ $('addu').addEventListener('click',async()=>{
   $('newu').value='';loadUsers();
 });
 
+// Guardar registo com verificação de código duplicado
 $('save').addEventListener('click',async()=>{
   const u=$('user').value,c=$('code').value.trim();
   if(!db)return msg('Configuração em falta.',1);
   if(!u)return msg('Selecione o utilizador.',1);
   if(!c)return msg('Leia ou escreva um código de barras.',1);
+  
   $('save').disabled=true;
-  const {error}=await db.from('registos').insert({codigo:c,utilizador:u});
+
+  // Verificar se o código já existe na base de dados
+  const {data: existing, error: checkError} = await db.from('registos').select('id').eq('codigo', c).limit(1);
+  
+  let isErro = 'nao';
+  if(!checkError && existing && existing.length > 0) {
+    const prosseguir = confirm('Este código já se encontra registado, deseja prosseguir?');
+    if(!prosseguir) {
+      $('save').disabled = false;
+      return msg('Registo cancelado.', 1);
+    }
+    isErro = 'sim';
+  }
+
+  const {error}=await db.from('registos').insert({codigo:c,utilizador:u,erro:isErro});
   $('save').disabled=false;
   if(error)return msg('Erro ao guardar: '+error.message,1);
   $('code').value='';msg('Registo guardado.');loadRecords();
@@ -407,12 +418,17 @@ $('exp').addEventListener('click',async()=>{
   msg('A preparar exportação…');
   let rows=[],from=0;const step=1000;
   for(;;){
-    const {data,error}=await db.from('registos').select('codigo,utilizador,criado_em').order('criado_em').order('id').range(from,from+step-1);
+    // Incluir o campo erro na consulta ao Supabase
+    const {data,error}=await db.from('registos').select('codigo,utilizador,criado_em,erro').order('criado_em').order('id').range(from,from+step-1);
     if(error)return msg('Erro na exportação: '+error.message,1);
     rows=rows.concat(data);if(data.length<step)break;from+=step;
   }
-  let csv='\ufeffcodigo_barras;data;hora;utilizador\r\n';
-  rows.forEach(r=>{const {data:d,hora}=dh(r.criado_em);csv+=[r.codigo,d,hora,r.utilizador].map(q).join(';')+'\r\n'});
+  // Adicionar a coluna erro no cabeçalho do CSV
+  let csv='\ufeffcodigo_barras;data;hora;utilizador;erro\r\n';
+  rows.forEach(r=>{
+    const {data:d,hora}=dh(r.criado_em);
+    csv+=[r.codigo,d,hora,r.utilizador,r.erro||'nao'].map(q).join(';')+'\r\n';
+  });
   const t=fData.format(new Date()).replaceAll('-','');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download='registos_'+t+'.csv';document.body.append(a);a.click();a.remove();
