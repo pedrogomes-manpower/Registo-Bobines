@@ -131,7 +131,7 @@ button, .btn {
   gap: 8px;
   width: 100%;
   padding: 12px 16px;
-  margin-top: 12px;
+  margin-top: 10px;
   font-size: 15px;
   font-weight: 600;
   border: 0;
@@ -147,13 +147,13 @@ button:hover, .btn:hover {
   background: var(--ac-hover);
 }
 
-button.sec {
+button.sec, .btn.sec {
   background: transparent;
   color: var(--ac);
   border: 1px solid var(--bd);
 }
 
-button.sec:hover {
+button.sec:hover, .btn.sec:hover {
   background: var(--bg);
 }
 
@@ -205,14 +205,12 @@ details summary {
 .row input { flex: 1; }
 .row button { width: auto; margin: 0; padding: 0 16px; }
 
-.btn.sec{background:transparent;color:var(--ac);border:1px solid var(--bd)}
-.btn.sec:hover{background:var(--bg)}
-#scanner{position:fixed;inset:0;z-index:10;background:#000;display:flex;flex-direction:column}
-#scanner[hidden]{display:none}
-#vid{flex:1;min-height:0;width:100%;object-fit:cover}
-.aim{position:absolute;left:10%;right:10%;top:50%;height:2px;background:#f87171;opacity:.85}
-#scanner p{position:absolute;top:max(16px,env(safe-area-inset-top));left:0;right:0;margin:0;text-align:center;color:#fff;font-size:14px;text-shadow:0 1px 3px #000}
-#stop{width:auto;margin:16px;margin-bottom:max(16px,env(safe-area-inset-bottom));background:#fff;color:#000}
+#scanner { position: fixed; inset: 0; z-index: 10; background: #000; display: flex; flex-direction: column; }
+#scanner[hidden] { display: none; }
+#vid { flex: 1; min-height: 0; width: 100%; object-fit: cover; }
+.aim { position: absolute; left: 10%; right: 10%; top: 50%; height: 2px; background: #f87171; opacity: .85; }
+#scanner p { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 0; right: 0; margin: 0; text-align: center; color: #fff; font-size: 14px; text-shadow: 0 1px 3px #000; }
+#stop { width: auto; margin: 16px; margin-bottom: max(16px, env(safe-area-inset-bottom)); background: #fff; color: #000; }
 </style>
 </head>
 <body>
@@ -242,8 +240,10 @@ details summary {
 
   <div class="card">
     <h2>Código de barras</h2>
-    <button id="live">📷 Ler com a câmara</button>
-    <label class="btn sec" for="photo" style="margin-top:10px">Tirar foto ao código</label>
+    <!-- Botão principal com ícone de leitor laser -->
+    <button id="live">║▌║ Ler com a câmara</button>
+    <!-- Botão secundário com ícone da máquina fotográfica -->
+    <label class="btn sec" for="photo">📷 Tirar foto ao código</label>
     <input type="file" id="photo" accept="image/*" capture="environment" hidden>
     
     <label for="code">Código lido (pode corrigir ou escrever)</label>
@@ -290,12 +290,11 @@ function store(k,v){try{if(v===undefined)return localStorage.getItem(k);localSto
 // Proteção da secção de gestão de utilizadores com PIN
 $('adminDetails').addEventListener('click', (e) => {
   const details = $('adminDetails');
-  // Se estiver fechado, vai abrir -> pedimos o PIN
   if (!details.open) {
-    e.preventDefault(); // Impede a abertura imediata
+    e.preventDefault();
     const pin = prompt('Introduza o PIN de administração para gerir utilizadores:');
     if (pin === ADMIN_PIN) {
-      details.open = true; // Abre se o PIN estiver correto
+      details.open = true;
     } else if (pin !== null) {
       alert('PIN incorreto.');
     }
@@ -310,7 +309,7 @@ function hints(){
     HINTS.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,FMT.map(f=>ZXing.BarcodeFormat[f]));
     HINTS.set(ZXing.DecodeHintType.TRY_HARDER,true)}
   return HINTS}
-function native(){ // o Safari do iPhone não tem BarcodeDetector: cai no ZXing
+function native(){
   if(nat===null){try{nat='BarcodeDetector' in window?new BarcodeDetector():false}catch(e){nat=false}}
   return nat}
 async function decodeCanvas(c){
@@ -319,7 +318,7 @@ async function decodeCanvas(c){
   if(window.ZXing){try{return new ZXing.MultiFormatReader().decode(
     new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(c))),hints()).getText()}catch(e){}}
   return null}
-function draw(src,w,h,max,rot){ // reduz (fotos de 12 MP são demasiado grandes) e roda 90° se pedido
+function draw(src,w,h,max,rot){
   const k=Math.min(1,max/Math.max(w,h)),W=Math.round(w*k),H=Math.round(h*k),c=document.createElement('canvas');
   c.width=rot?H:W;c.height=rot?W:H;
   const x=c.getContext('2d',{willReadFrequently:true});
@@ -337,6 +336,7 @@ async function scan(file){
   if(code){$('code').value=code;msg('Código lido. Confirme e guarde.')}
   else msg('Não foi possível ler. Tente outra foto, mais perto e com boa luz, ou escreva o código.',1);
 }
+
 // ---- Leitura em direto com a câmara ----
 let stream=null,scanning=false;
 async function startLive(){
