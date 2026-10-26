@@ -204,6 +204,15 @@ details summary {
 .row { display: flex; gap: 8px; }
 .row input { flex: 1; }
 .row button { width: auto; margin: 0; padding: 0 16px; }
+
+.btn.sec{background:transparent;color:var(--ac);border:1px solid var(--bd)}
+.btn.sec:hover{background:var(--bg)}
+#scanner{position:fixed;inset:0;z-index:10;background:#000;display:flex;flex-direction:column}
+#scanner[hidden]{display:none}
+#vid{flex:1;min-height:0;width:100%;object-fit:cover}
+.aim{position:absolute;left:10%;right:10%;top:50%;height:2px;background:#f87171;opacity:.85}
+#scanner p{position:absolute;top:max(16px,env(safe-area-inset-top));left:0;right:0;margin:0;text-align:center;color:#fff;font-size:14px;text-shadow:0 1px 3px #000}
+#stop{width:auto;margin:16px;margin-bottom:max(16px,env(safe-area-inset-bottom));background:#fff;color:#000}
 </style>
 </head>
 <body>
@@ -233,7 +242,8 @@ details summary {
 
   <div class="card">
     <h2>Código de barras</h2>
-    <label class="btn" for="photo">📷 Tirar foto ao código</label>
+    <button id="live">📷 Ler com a câmara</button>
+    <label class="btn sec" for="photo" style="margin-top:10px">Tirar foto ao código</label>
     <input type="file" id="photo" accept="image/*" capture="environment" hidden>
     
     <label for="code">Código lido (pode corrigir ou escrever)</label>
@@ -249,6 +259,13 @@ details summary {
     <button class="sec" id="exp">Exportar tudo em CSV</button>
   </div>
 </main>
+
+<div id="scanner" hidden>
+  <video id="vid" playsinline muted autoplay></video>
+  <div class="aim"></div>
+  <p>Aponte ao código de barras</p>
+  <button id="stop">Cancelar</button>
+</div>
 
 <script>
 // ==========================================
@@ -285,15 +302,60 @@ $('adminDetails').addEventListener('click', (e) => {
   }
 });
 
+// ---- Descodificação (funciona em Android e iPhone) ----
+const FMT=['EAN_13','EAN_8','UPC_A','UPC_E','CODE_128','CODE_39','CODE_93','ITF','QR_CODE','DATA_MATRIX'];
+let HINTS=null,nat=null;
+function hints(){
+  if(!HINTS&&window.ZXing){HINTS=new Map();
+    HINTS.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,FMT.map(f=>ZXing.BarcodeFormat[f]));
+    HINTS.set(ZXing.DecodeHintType.TRY_HARDER,true)}
+  return HINTS}
+function native(){ // o Safari do iPhone não tem BarcodeDetector: cai no ZXing
+  if(nat===null){try{nat='BarcodeDetector' in window?new BarcodeDetector():false}catch(e){nat=false}}
+  return nat}
+async function decodeCanvas(c){
+  const n=native();
+  if(n){try{const r=await n.detect(c);if(r[0])return r[0].rawValue}catch(e){}}
+  if(window.ZXing){try{return new ZXing.MultiFormatReader().decode(
+    new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(new ZXing.HTMLCanvasElementLuminanceSource(c))),hints()).getText()}catch(e){}}
+  return null}
+function draw(src,w,h,max,rot){ // reduz (fotos de 12 MP são demasiado grandes) e roda 90° se pedido
+  const k=Math.min(1,max/Math.max(w,h)),W=Math.round(w*k),H=Math.round(h*k),c=document.createElement('canvas');
+  c.width=rot?H:W;c.height=rot?W:H;
+  const x=c.getContext('2d',{willReadFrequently:true});
+  if(rot){x.translate(H,0);x.rotate(Math.PI/2)}
+  x.drawImage(src,0,0,W,H);return c}
+
 async function scan(file){
   msg('A ler o código…');let code=null;
-  try{if('BarcodeDetector' in window){const r=await new BarcodeDetector().detect(await createImageBitmap(file));if(r[0])code=r[0].rawValue}}catch(e){}
-  if(!code&&window.ZXing){const url=URL.createObjectURL(file);
-    try{code=(await new ZXing.BrowserMultiFormatReader().decodeFromImageUrl(url)).getText()}catch(e){}
-    URL.revokeObjectURL(url)}
+  const url=URL.createObjectURL(file),img=new Image();
+  try{img.src=url;await img.decode();
+    scanLoop: for(const max of [1600,1000,2400])for(const rot of [0,1]){
+      code=await decodeCanvas(draw(img,img.naturalWidth,img.naturalHeight,max,rot));
+      if(code)break scanLoop}}catch(e){}
+  URL.revokeObjectURL(url)
   if(code){$('code').value=code;msg('Código lido. Confirme e guarde.')}
   else msg('Não foi possível ler. Tente outra foto, mais perto e com boa luz, ou escreva o código.',1);
 }
+// ---- Leitura em direto com a câmara ----
+let stream=null,scanning=false;
+async function startLive(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)return msg('Este browser não abre a câmara aqui. Use “Tirar foto ao código”.',1);
+  try{stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}})}
+  catch(e){return msg(e.name==='NotAllowedError'?'Permita o acesso à câmara nas definições do browser.':'Não foi possível abrir a câmara. Use “Tirar foto ao código”.',1)}
+  const v=$('vid');v.srcObject=stream;try{await v.play()}catch(e){}
+  $('scanner').hidden=false;scanning=true;liveLoop(v)}
+async function liveLoop(v){
+  let n=0;
+  while(scanning){
+    if(v.videoWidth){
+      const code=await decodeCanvas(draw(v,v.videoWidth,v.videoHeight,1280,n++%3===2?1:0));
+      if(code&&scanning){stopLive();$('code').value=code;if(navigator.vibrate)navigator.vibrate(80);msg('Código lido. Confirme e guarde.');return}}
+    await new Promise(r=>setTimeout(r,120))}}
+function stopLive(){scanning=false;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('vid').srcObject=null;$('scanner').hidden=true}
+$('live').addEventListener('click',startLive);
+$('stop').addEventListener('click',stopLive);
+addEventListener('pagehide',stopLive);
 $('photo').addEventListener('change',e=>{const f=e.target.files[0];if(f)scan(f);e.target.value=''});
 $('user').addEventListener('change',()=>store('u',$('user').value));
 
@@ -332,7 +394,7 @@ $('save').addEventListener('click',async()=>{
   const u=$('user').value,c=$('code').value.trim();
   if(!db)return msg('Configuração em falta.',1);
   if(!u)return msg('Selecione o utilizador.',1);
-  if(!c)return mag?msg('Leia ou escreva um código de barras.',1):msg('Leia ou escreva um código de barras.',1);
+  if(!c)return msg('Leia ou escreva um código de barras.',1);
   $('save').disabled=true;
   const {error}=await db.from('registos').insert({codigo:c,utilizador:u});
   $('save').disabled=false;
