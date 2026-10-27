@@ -384,7 +384,6 @@ $('addu').addEventListener('click',async()=>{
   $('newu').value='';loadUsers();
 });
 
-// Guardar registo com verificação de código duplicado
 $('save').addEventListener('click',async()=>{
   const u=$('user').value,c=$('code').value.trim();
   if(!db)return msg('Configuração em falta.',1);
@@ -393,7 +392,6 @@ $('save').addEventListener('click',async()=>{
   
   $('save').disabled=true;
 
-  // Verificar se o código já existe na base de dados
   const {data: existing, error: checkError} = await db.from('registos').select('id').eq('codigo', c).limit(1);
   
   let isErro = 'nao';
@@ -413,17 +411,23 @@ $('save').addEventListener('click',async()=>{
 });
 
 function q(s){s=String(s);return /[;"\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+
+// Proteção do botão de exportação com PIN
 $('exp').addEventListener('click',async()=>{
+  const pin = prompt('Introduza o PIN de administração para exportar os dados:');
+  if (pin !== ADMIN_PIN) {
+    if (pin !== null) alert('PIN incorreto.');
+    return;
+  }
+
   if(!db)return msg('Configuração em falta.',1);
   msg('A preparar exportação…');
   let rows=[],from=0;const step=1000;
   for(;;){
-    // Incluir o campo erro na consulta ao Supabase
     const {data,error}=await db.from('registos').select('codigo,utilizador,criado_em,erro').order('criado_em').order('id').range(from,from+step-1);
     if(error)return msg('Erro na exportação: '+error.message,1);
     rows=rows.concat(data);if(data.length<step)break;from+=step;
   }
-  // Adicionar a coluna erro no cabeçalho do CSV
   let csv='\ufeffcodigo_barras;data;hora;utilizador;erro\r\n';
   rows.forEach(r=>{
     const {data:d,hora}=dh(r.criado_em);
